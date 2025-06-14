@@ -1,0 +1,16 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dc-b
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.26.15
+    labels:
+      topology.kubernetes.io/region: dc-b
+  - role: worker
+    image: kindest/node:v1.26.15
+    labels:
+      topology.kubernetes.io/region: dc-b
+  - role: worker
+    image: kindest/node:v1.26.15
+    labels:
+      topology.kubernetes.io/region: dc-b

@@ -1,0 +1,16 @@
+- name: Destroy kind clusters and Docker network
+  hosts: localhost
+  gather_facts: false
+  vars_files: vars.yaml
+  tasks:
+    - name: Delete kind clusters
+      shell: kind delete cluster --name {{ item.name }}
+      loop: "{{ clusters }}"
+      ignore_errors: yes
+
+    - name: Remove Docker network
+      shell: |
+        if docker network ls | grep -q "{{ docker_network }}"; then
+          docker network rm {{ docker_network }};
+        fi
+      ignore_errors: yes

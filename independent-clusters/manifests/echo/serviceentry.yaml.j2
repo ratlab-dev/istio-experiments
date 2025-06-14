@@ -1,0 +1,39 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: echo-external
+  namespace: echo
+spec:
+  hosts:
+    - echo-external.echo.svc.cluster.local
+  location: MESH_EXTERNAL
+  ports:
+    - number: 80
+      name: http
+      protocol: HTTP
+  resolution: STATIC
+  endpoints:
+    - address: {{ echo_ip }}
+      locality: {{ region }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: echo-external
+  namespace: echo # Make sure this matches the namespace of your ServiceEntry
+spec:
+  hosts:
+  - echo-external.echo.svc.cluster.local # This MUST match the 'hosts' in your ServiceEntry
+  gateways:
+  - mesh # Apply to traffic originating from inside the mesh
+  http:
+  - route:
+    - destination:
+        host: echo-external.echo.svc.cluster.local
+        port:
+          number: 80 # Must match the port defined in your ServiceEntry
+    headers:
+      request:
+        set:
+          Host: echo.

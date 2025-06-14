@@ -1,0 +1,76 @@
+- name: Create kind clusters and configure MetalLB
+  hosts: localhost
+  vars_files:
+  - vars.yaml
+  tasks:
+    - name: Create kind cluster if it doesn't exist
+      shell: |
+        if ! kind get clusters | grep -q "^{{ item.name }}$"; then
+          kind create cluster --name {{ item.name }} --config {{ item.config }};
+        else
+          echo "Cluster {{ item.name }} already exists.";
+        fi
+      loop: "{{ clusters }}"
+    - name: Install MetalLB CRDs and components on each cluster
+      shell: kubectl --context kind-{{ item.name }} apply -f ../manifests/metallb-manifests.yaml
+      loop: "{{ clusters }}"  
+    - name: Wait for MetalLB controller deployment to be available
+      shell: |
+        kubectl --context kind-{{ item.name }} -n metallb-system wait --for=condition=available --timeout=120s deployment/controller
+      loop: "{{ clusters }}"
+
+
+      
+    - name: Template MetalLB IPAddressPool for cluster
+      template:
+        src: ../metallb/IPAddressPool.yaml.j2
+        dest: /tmp/IPAddressPool-{{ item.name }}.yaml
+      vars:
+        ip_range: "{{ item.ip_range }}"
+      loop: "{{ clusters }}"
+    
+    - name: Apply MetalLB L2Advertisement for cluster
+      shell: kubectl --context kind-{{ item.name }} apply -f ../metallb/L2Advertisement.yaml
+      loop: "{{ clusters }}"
+    
+    - name: Apply MetalLB IPAddressPool for cluster
+      shell: kubectl --context kind-{{ item.name }} apply -f /tmp/IPAddressPool-{{ item.name }}.yaml
+      loop: "{{ clusters }}"
+    
+    - name: Install Istio demo profile on each cluster
+      shell: >
+        ../istio-1.16.2/bin/istioctl install
+        --context kind-{{ item.name }}
+        --set profile=demo
+        -f ../istio-1.16.2/manifests/profiles/demo.yaml
+        -y
+      loop: "{{ clusters }}"
+
+    - name: Install echo manifests on both clusters
+      shell: kubectl --context kind-{{ item.name }} apply -f ../manifests/echo/echo.yaml
+      loop: "{{ clusters }}"
+    
+    - name: Get echo service LoadBalancer IP for each cluster
+      shell: |
+        kubectl --context kind-{{ item.name }} -n istio-system get svc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+      register: echo_lb_ips
+      loop: "{{ clusters }}"
+    
+    - name: Create ServiceEntry in each cluster for the other cluster's echo service
+      loop: "{{ clusters | product(clusters) | list }}"
+      when: item.0.name != item.1.name
+      vars:
+        echo_ip: "{{ echo_lb_ips.results[clusters.index(item.1)].stdout }}"
+        region: "{{ region_map[item.1.name] }}"
+      template:
+        src: ../manifests/echo/serviceentry.yaml.j2
+        dest: /tmp/serviceentry-{{ item.0.name }}-for-{{ item.1.name }}.yaml
+      loop_control:
+        label: "{{ item.0.name }}-for-{{ item.1.name }}"
+
+    - name: Apply ServiceEntry in each cluster for the other cluster's echo service
+      loop: "{{ clusters | product(clusters) | list }}"
+      when: item.0.name != item.1.name
+      shell: kubectl --context kind-{{ item.0.name }} apply -f /tmp/serviceentry-{{ item.0.name }}-for-{{ item.1.name }}.yaml
+      loop_control:
+        label: "{{ item.0.name }}-for-{{ item.1.name }}"

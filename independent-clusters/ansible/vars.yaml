@@ -1,0 +1,13 @@
+region_map:
+  dc-a: dc-a
+  dc-b: dc-b
+docker_network: kind-multicluster
+docker_subnet: 172.18.0.0/16
+clusters:
+  - name: dc-a
+    config: ../kind/cluster-dc-a.yaml
+    ip_range: 172.18.5.1-172.18.5.100
+  - name: dc-b
+    config: ../kind/cluster-dc-b.yaml
+    ip_range: 172.18.66.1-172.18.66.100
+kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"

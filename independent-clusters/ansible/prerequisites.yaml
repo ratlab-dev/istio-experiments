@@ -1,0 +1,19 @@
+---
+- name: Download Istio base setup
+  hosts: localhost
+  gather_facts: no
+  vars:
+    istio_version: "1.16.2"
+    target_arch: "x86_64"
+    istio_download_url: "https://istio.io/downloadIstio"
+    dest_dir: "{{ playbook_dir }}/.."
+  tasks:
+    - name: Download and extract Istio {{ istio_version }}
+      shell: |
+        curl -L {{ istio_download_url }} | ISTIO_VERSION={{ istio_version }} TARGET_ARCH={{ target_arch }} sh -
+      args:
+        chdir: "{{ dest_dir }}"
+      environment:
+        ISTIO_VERSION: "{{ istio_version }}"
+        TARGET_ARCH: "{{ target_arch }}"
+      register: istio_download
